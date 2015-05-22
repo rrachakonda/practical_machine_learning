@@ -1,0 +1,125 @@
+---
+title: "practical machine learning course  project"
+output: html_document
+---
+
+**Synopsis**
+The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.you may use any of the variables to predict with. you should create a report showing  how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you mad the choices you did. you will also you your prediction model to predict 20 differenct test cases.
+
+
+Load the following libraries for the project.
+
+```{r}
+library(randomForest)
+library(caret)
+library(e1071)
+```
+Initially Read the both data sets, training and testing
+
+```{r}
+training_dataset<-read.csv("pml-training.csv")
+testing_dataset<-read.csv("pml-testing.csv")
+```
+Let us, randomly split the actual training dataset(training_dataset) into smaller training set (training1) and a validation set  (training2):
+```{r}
+set.seed(10)
+train<-createDataPartition(y=training_dataset$classe, p=0.7,list=F)
+training1<-training_dataset[train, ]
+training2<-training_dataset[-train, ]
+```
+After analyzing the training1 and training2 datasets, I decided to remove variables with zero variance, variables that are always NA.
+
+remove variables with zero variance
+```{r}
+zerovar<-nearZeroVar(training1)
+training1<-training1[, -zerovar]
+training2<-training2[, -zerovar]
+```
+
+remove variables with NA values
+```{r}
+NAvar<-sapply(training1,function(x) mean(is.na(x))) > 0.95
+training1<-training1[, NAvar==F]
+training2<-training2[, NAvar==F]
+```
+remove variables that are not used for prediction model, these are the first five variables
+```{r}
+training1<-training1[, -(1:5)]
+training2<-training2[, -(1:5)]
+```
+**Build the prediction model**
+
+Let us start with Random Forest model. First, fit the model on training1, let the "train" function to use 3-fold cross-validation to select optimal tuning parameters for the model.
+```{r}
+fitVar<-trainControl(method="cv", number=3,verboseIter=F)
+fitmodel<-train(classe ~ ., data=training1, method="rf", trControl=fitVar)
+fitmodel$finalModel
+```
+The fit model above is using 500 trees and 27 split variables.
+
+**Model Selection and evaluation**
+
+Use the fitted model to predict label "classe" in data set "training2", and show the confusion matrix to compare the predicted versus the actual labels:
+
+Below,using model to predict classe in validation data set training2
+
+```{r}
+predVar<-predict(fitmodel, newdata=training2)
+```
+show confusion matrix to estimate out of sample error
+
+```{r}
+confusionMatrix(training2$classe, predVar)
+```
+with above result, the accuracy is 99.7%, thus predicted accuracy for out of sample error is 0.3%.
+Not let us use Random Forest to predict test data set.
+
+Before we predict on test data set, we train the model on full training data set (training_dataset).
+now do everything we did above on full datasets: training_dataset and testing_dataset
+
+remove variables with zero variance
+```{r}
+zerovar<-nearZeroVar(training_dataset)
+training_dataset<-training_dataset[, -zerovar]
+testing_dataset<-testing_dataset[, -zerovar]
+```
+
+remove variables with NA values
+```{r}
+NAvar<-sapply(training_dataset,function(x) mean(is.na(x))) > 0.95
+training_dataset<-training_dataset[, NAvar==F]
+testing_dataset<-testing_dataset[, NAvar==F]
+```
+remove variables that are not used for prediction model, these are the first five variables
+```{r}
+training_dataset<-training_dataset[, -(1:5)]
+testing_dataset<-testing_dataset[, -(1:5)]
+```
+Let us refit the model for full training data set ( training_dataset)
+```{r}
+fitVar<-trainControl(method="cv", number=3,verboseIter=F)
+fitmodel<-train(classe ~ ., data=training_dataset, method="rf", trControl=fitVar)
+```
+Now, doing full testing_data set predictions below
+
+```{r}
+predi_testset<-predict(fitmodel, newdata=testing_dataset)
+predi_testset<-as.character(predi_testset)
+```
+Now, create function to write predictions to files
+
+```{r}
+pml_write_files <- function(x) {
+  n <- length(x)
+  for(i in 1:n) {
+    filename <- paste0("problem_id_", i, ".txt")
+    write.table(x[i], file=filename, quote=F, row.names=F, col.names=F)
+    }
+  }
+
+```
+prediction files to submit
+```{r}
+pml_write_files(predi_testset)
+```
+
